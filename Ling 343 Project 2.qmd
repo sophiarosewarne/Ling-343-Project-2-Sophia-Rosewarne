@@ -1,0 +1,220 @@
+---
+title: "Project 2"
+format: html
+editor: visual
+author: "Sophia Rosewarne"
+---
+
+## Introduction:
+
+The following analysis will be exploring sentiment of headlines over time and throughout the year. I aim to observe how (if at all) major events like the 2008 recession and COVID-19 affected sentiment of news headlines. The data I will be using is a data set containing over 1.2 million headlines published by Australian Boradcasting Company News from 2003 to 2021. The month, day, and year of publication are also recorded with each headline. I also perform a TF-IDF analysis
+
+A Little Data Reformatting:
+
+```{r echo = FALSE}
+data <- read.csv("abcnews-date-text.csv")
+```
+
+```{r echo = FALSE}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(stringr)
+library(tidytext)
+
+```
+
+```{r echo = FALSE}
+data <- data |>
+  mutate(data, year = substr(data$publish_date, 1, 4)) |>
+  mutate(data, month = substr(data$publish_date, 5, 6)) |>
+  mutate(data, day = substr(data$publish_date, 7, 8)) |>
+  mutate(id = row_number ())
+```
+
+## Sentiment and COVID:
+
+This section uses data from the years 2020 and 2021 to explore sentiment around COVID.
+
+```{r echo = FALSE}
+covid20 <- filter(data, year == "2020")
+covid21 <- filter(data, year == "2021")
+
+covid <- rbind(covid20, covid21) 
+```
+
+```{r}
+
+```
+
+```{r echo = FALSE}
+covidnostop <- covid |>
+  unnest_tokens(word, headline_text) |>
+  anti_join(stop_words)
+```
+
+```{r echo = FALSE}
+covidnostop |>
+  inner_join(get_sentiments("bing")) |>
+  count(word, sentiment, sort = TRUE) |>
+  ungroup() |>
+  head(10)
+  
+
+```
+
+We can see that the 7 of the 10 most commonly used words over the entire timeframe have a negative sentiment. There is also an issue within the data in that Trump is not recognized as a name during the sentiment calculations, but as the word itself. It is likely that the name was being used in many of the titles given the time frame, so "Trump" as a positive sentiment word should be questioned.
+
+## TD-IDF Analysis:
+
+```{r echo = FALSE}
+tidydata<- data |>
+  unnest_tokens(word, headline_text)
+
+```
+
+```{r echo = FALSE}
+tidydata <-tidydata |>
+  anti_join(stop_words)
+```
+
+```{r echo = FALSE}
+tidydata |>
+  count(word, sort = TRUE)|>
+  head(10)
+```
+
+```{r echo = FALSE}
+freqtidydata <- tidydata |>
+  group_by(year) |>
+  count(word, sort = TRUE)
+freqtidydata
+```
+
+```{r echo = FALSE}
+idf <- freqtidydata |>
+  bind_tf_idf(word, year, n)
+idf |>
+  select(year, word, tf_idf) |>
+  arrange(desc(tf_idf))
+```
+
+```{r}
+idf |>
+  group_by(year) |>
+  arrange(desc(tf_idf)) |>
+  top_n(15, tf_idf) |>
+  ggplot(aes(x = tf_idf, y = reorder(word, tf_idf), fill = year )) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~year, scales = "free") +
+  theme_minimal ()
+  
+```
+
+The above graph illustrates the results of a TF-IDF analysis based on each year. TF-IDF essentially measures how unique or characteristic a word is in the collection of headlines from a given year.
+
+We can see what major events correspond with what years from this analysis, for example coronavirus, SARS, Brexit, and the Swine flu.
+
+## Has the number of articles published per year changed?
+
+```{r echo = FALSE}
+articlesperyear<- data |>
+  count(year)
+```
+
+```{r}
+ggplot(
+  articlesperyear, 
+        mapping = aes(x = year, y = n)
+) +
+  geom_col(mapping = aes(x = year, y = n, color = year)) 
+  
+```
+
+For this news company the number of articles published per year has consistently been shrinking since 2013, which was its peak of articles published per year.
+
+```{r echo = FALSE}
+wordperyear <- tidydata |>
+  group_by(year) |>
+  tally() |>
+  rename( "n1" = "n")
+
+```
+
+```{r}
+ggplot(
+  wordperyear, 
+        mapping = aes(x = year, y = n1)
+) +
+  geom_col(mapping = aes(x = year, y = n1, color = year))
+
+```
+
+## Does the Average Title Length Vary Over Time?
+
+```{r}
+wordminusarticle <- left_join(wordperyear, articlesperyear)
+
+wordminusarticle$diff <- (wordminusarticle$n1 / wordminusarticle$n)
+```
+
+```{r}
+ggplot(
+  wordminusarticle, 
+        mapping = aes(x = year, y = diff)
+) +
+  geom_col(mapping = aes(x = year, y = diff, color = year))
+
+```
+
+The average title length has increased over time on average.
+
+## Is Sentiment of the News Positive or Negative?:
+
+```{r echo = FALSE}
+sentiment <- tidydata |>
+  inner_join(get_sentiments("bing")) |>
+  group_by(year) |>
+  count(word, sentiment, sort = TRUE) 
+```
+
+```{r echo = FALSE}
+sentimentbyyear<- sentiment |>
+  group_by(year) |>
+  count(sentiment)
+```
+
+```{r}
+ggplot(sentimentbyyear, 
+       mapping = aes(x = year, y = n, group = sentiment)) +
+  geom_line(aes(linetype = sentiment)) +
+  labs(title = "Word Counts by Sentiment (No Stop Words)", y = "Word Count", x = "Year")
+```
+
+The news site publishes many more title words conveying negative sentiment than those conveying positive sentiment.
+
+## What Were the Most Common Words Each Year?
+
+```{r echo = FALSE}
+top5words<- tidydata |>
+  group_by(year) |>
+  count(word, sort = TRUE)|>
+  arrange(desc(n)) |>
+  slice(1:5)
+top5words
+   
+```
+
+```{r}
+top5words |>
+  group_by(year) |>
+  arrange(desc(n)) |>
+  ggplot(aes(x = n, y = reorder(word, n), fill = year )) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "n") +
+  facet_wrap(~year, scales = "free") +
+  theme_minimal ()
+```
+
+This graph allows us to see the top 5 words each year. Policing is consistently a highly-reported on topic, being the most printed word for almost every year included in the dataset. We can see that when COVID came into play reporting shifted and covered that more while other topics like policing were reported on far less.
